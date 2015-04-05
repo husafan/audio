@@ -49,7 +49,9 @@ type WavReader struct {
 }
 
 // Creates a new, validated WavReader with initialized header data. If the RIFF
-// file is not a valid WAV file, then this method will return a non-nil error.
+// header does not indicate a WAV file, then this method will return a non-nil
+// error. Also, if the wav file's standard "fmt" block does not exist or does
+// not parse correctly, a non-nil error will be returned.
 func NewWavReader(r io.Reader) (*WavReader, error) {
 	bufferedReader := bufio.NewReader(r)
 
