@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"regexp"
 	"strings"
 	"testing"
@@ -144,4 +145,74 @@ func TestValidHeaderAndFormatChunk(t *testing.T) {
 	assert.Equal(t, byteRate, reader.FormatChunk.ByteRate)
 	assert.Equal(t, blockAlign, reader.FormatChunk.BlockAlign)
 	assert.Equal(t, bitsPerSample, reader.FormatChunk.BitsPerSample)
+}
+
+func TestValidData(t *testing.T) {
+	var buffer bytes.Buffer
+	var size4Bytes = make([]byte, 4)
+	var size2Bytes = make([]byte, 2)
+	wavSize := uint32(123)
+	fmtChunkId := uint32(456)
+	fmtChunkSize := uint32(789)
+	audioFormat := uint16(111)
+	numChannels := uint16(2)
+	sampleRate := uint32(44000)
+	byteRate := uint32(56000)
+	blockAlign := uint16(12)
+	bitsPerSample := uint16(16)
+
+	buffer.WriteString("RIFF")
+	binary.LittleEndian.PutUint32(size4Bytes, wavSize)
+	buffer.Write(size4Bytes)
+	buffer.WriteString("WAVE")
+	binary.BigEndian.PutUint32(size4Bytes, fmtChunkId)
+	buffer.Write(size4Bytes)
+	binary.LittleEndian.PutUint32(size4Bytes, fmtChunkSize)
+	buffer.Write(size4Bytes)
+	binary.LittleEndian.PutUint16(size2Bytes, audioFormat)
+	buffer.Write(size2Bytes)
+	binary.LittleEndian.PutUint16(size2Bytes, numChannels)
+	buffer.Write(size2Bytes)
+	binary.LittleEndian.PutUint32(size4Bytes, sampleRate)
+	buffer.Write(size4Bytes)
+	binary.LittleEndian.PutUint32(size4Bytes, byteRate)
+	buffer.Write(size4Bytes)
+	binary.LittleEndian.PutUint16(size2Bytes, blockAlign)
+	buffer.Write(size2Bytes)
+	binary.LittleEndian.PutUint16(size2Bytes, bitsPerSample)
+	buffer.Write(size2Bytes)
+
+	// Write data entries corresponding to 2 channels and 16 bits per
+	// sample.
+	binary.LittleEndian.PutUint16(size2Bytes, 123)
+	buffer.Write(size2Bytes)
+	var signedSample int16 = -123
+	binary.LittleEndian.PutUint16(size2Bytes, uint16(signedSample))
+	buffer.Write(size2Bytes)
+	binary.LittleEndian.PutUint16(size2Bytes, 321)
+	buffer.Write(size2Bytes)
+	signedSample = -321
+	binary.LittleEndian.PutUint16(size2Bytes, uint16(signedSample))
+	buffer.Write(size2Bytes)
+
+	data := strings.NewReader(buffer.String())
+	reader, err := NewWavReader(data)
+	assert.Nil(t, err)
+	assert.NotNil(t, reader)
+
+	sample, err := reader.GetSample()
+	assert.Nil(t, err)
+	assert.Equal(t, 2, len(sample))
+	assert.Equal(t, 123, sample[0])
+	assert.Equal(t, -123, int16(sample[1]))
+	sample, err = reader.GetSample()
+	assert.Nil(t, err)
+	assert.Equal(t, 2, len(sample))
+	assert.Equal(t, 321, sample[0])
+	assert.Equal(t, -321, int16(sample[1]))
+
+	sample, err = reader.GetSample()
+	assert.Nil(t, sample)
+	assert.NotNil(t, err)
+	assert.Equal(t, io.EOF, err)
 }

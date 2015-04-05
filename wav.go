@@ -17,7 +17,7 @@ const (
 )
 
 // An internal type for capturing the id and size of a subchunk.
-type subChunk struct {
+type SubChunk struct {
 	Id   uint32
 	Size uint32
 }
@@ -34,7 +34,7 @@ type formatChunk struct {
 
 // A public type describing the "fmt" chunk. Describes the audio file format.
 type FormatChunk struct {
-	*subChunk
+	*SubChunk
 	*formatChunk
 }
 
@@ -102,8 +102,25 @@ func NewWavReader(r io.Reader) (*WavReader, error) {
 	return wavReader, nil
 }
 
+/**
+ * Gathers audio samples from a WAV file's data chunk. Returns an array with
+ * [w.NumChannels] entries with each entry containing [w.BitsPerSample] data.
+ * In most cases, each entry corresponds to 16 bits per entry.
+ */
+func (w *WavReader) GetSample() ([]int16, error) {
+	numChannels := int(w.FormatChunk.NumChannels)
+	sample := make([]int16, numChannels)
+	for i := 0; i < numChannels; i++ {
+		if err := binary.Read(
+			w.buffer, binary.LittleEndian, &sample[i]); err != nil {
+			return nil, err
+		}
+	}
+	return sample, nil
+}
+
 func (w *WavReader) readFormatChunk() (*FormatChunk, error) {
-	newSubChunk, err := w.ReadSubChunk()
+	newSubChunk, err := w.readSubChunk()
 	if err != nil {
 		return nil, err
 	}
@@ -115,8 +132,8 @@ func (w *WavReader) readFormatChunk() (*FormatChunk, error) {
 	return &FormatChunk{newSubChunk, newFormatChunk}, nil
 }
 
-func (w *WavReader) ReadSubChunk() (*subChunk, error) {
-	newSubChunk := &subChunk{}
+func (w *WavReader) readSubChunk() (*SubChunk, error) {
+	newSubChunk := &SubChunk{}
 	if err := binary.Read(
 		w.buffer, binary.BigEndian, &newSubChunk.Id); err != nil {
 		return nil, err
