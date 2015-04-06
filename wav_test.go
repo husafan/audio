@@ -20,7 +20,7 @@ func TestErrorReadingFourCC(t *testing.T) {
 	assert.Nil(t, reader)
 	assert.NotNil(t, err)
 	re := regexp.MustCompile("FourCC")
-	assert.NotNil(t, re.FindString(err.Error()))
+	assert.NotEqual(t, "", re.FindString(err.Error()))
 }
 
 func TestErrorReadingSize(t *testing.T) {
@@ -30,7 +30,7 @@ func TestErrorReadingSize(t *testing.T) {
 	assert.Nil(t, reader)
 	assert.NotNil(t, err)
 	re := regexp.MustCompile("Size")
-	assert.NotNil(t, re.FindString(err.Error()))
+	assert.NotEqual(t, "", re.FindString(err.Error()))
 }
 
 func TestErrorReadingFormat(t *testing.T) {
@@ -40,7 +40,7 @@ func TestErrorReadingFormat(t *testing.T) {
 	assert.Nil(t, reader)
 	assert.NotNil(t, err)
 	re := regexp.MustCompile("Format")
-	assert.NotNil(t, re.FindString(err.Error()))
+	assert.NotEqual(t, "", re.FindString(err.Error()))
 }
 
 func TestInvalidWavFileChunkType(t *testing.T) {
@@ -70,9 +70,9 @@ func TestReadHeaderChunk(t *testing.T) {
 
 	_, err := NewWavReader(strings.NewReader(buffer.String()))
 	// Expect an invalid Format Chunk as the header was parsed successfully.
-	re := regexp.MustCompile("Invalid format chunk")
 	assert.NotNil(t, err)
-	assert.NotNil(t, re.FindString(err.Error()))
+	re := regexp.MustCompile("Invalid format chunk")
+	assert.NotEqual(t, "", re.FindString(err.Error()))
 }
 
 func TestInvalidFormatChunk(t *testing.T) {
