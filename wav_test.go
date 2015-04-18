@@ -3,7 +3,7 @@ package wav_test
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
+	"errors"
 	"io"
 	"regexp"
 	"strings"
@@ -13,53 +13,97 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestErrorReadingFourCC(t *testing.T) {
+var (
+	wavSize       = uint32(123)
+	fmtChunkId    = "fmt "
+	fmtChunkSize  = uint32(789)
+	audioFormat   = uint16(111)
+	numChannels   = uint16(2)
+	sampleRate    = uint32(44000)
+	byteRate      = uint32(56000)
+	blockAlign    = uint16(12)
+	bitsPerSample = uint16(16)
+)
+
+func getValidHeaderAndFmtChunk() *bytes.Buffer {
+	var buffer bytes.Buffer
+	var size4Bytes = make([]byte, 4)
+	var size2Bytes = make([]byte, 2)
+
+	buffer.WriteString("RIFF")
+	binary.LittleEndian.PutUint32(size4Bytes, wavSize)
+	buffer.Write(size4Bytes)
+	buffer.WriteString("WAVE")
+	buffer.WriteString(fmtChunkId)
+	binary.LittleEndian.PutUint32(size4Bytes, fmtChunkSize)
+	buffer.Write(size4Bytes)
+	binary.LittleEndian.PutUint16(size2Bytes, audioFormat)
+	buffer.Write(size2Bytes)
+	binary.LittleEndian.PutUint16(size2Bytes, numChannels)
+	buffer.Write(size2Bytes)
+	binary.LittleEndian.PutUint32(size4Bytes, sampleRate)
+	buffer.Write(size4Bytes)
+	binary.LittleEndian.PutUint32(size4Bytes, byteRate)
+	buffer.Write(size4Bytes)
+	binary.LittleEndian.PutUint16(size2Bytes, blockAlign)
+	buffer.Write(size2Bytes)
+	binary.LittleEndian.PutUint16(size2Bytes, bitsPerSample)
+	buffer.Write(size2Bytes)
+
+	return &buffer
+}
+
+func TestErrorReadingRiffIdNotEnoughtData(t *testing.T) {
 	// FourCC (four character code) must be 4 bytes.
 	data := strings.NewReader("RIF")
 	reader, err := NewWavReader(data)
 	assert.Nil(t, reader)
 	assert.NotNil(t, err)
-	re := regexp.MustCompile("FourCC")
+	re := regexp.MustCompile("EOF")
 	assert.NotEqual(t, "", re.FindString(err.Error()))
 }
 
-func TestErrorReadingSize(t *testing.T) {
+func TestErrorReadingRiffWrongId(t *testing.T) {
+	// FourCC (four character code) must be 4 bytes.
+	data := strings.NewReader("RIFD0000")
+	reader, err := NewWavReader(data)
+	assert.Nil(t, reader)
+	assert.NotNil(t, err)
+	re := regexp.MustCompile("Should be RIFF")
+	assert.NotEqual(t, "", re.FindString(err.Error()))
+}
+
+func TestErrorReadingSizeNotEnoughData(t *testing.T) {
 	// Chunk ID must be 4 bytes.
 	data := strings.NewReader("RIFFd")
 	reader, err := NewWavReader(data)
 	assert.Nil(t, reader)
 	assert.NotNil(t, err)
-	re := regexp.MustCompile("Size")
+	re := regexp.MustCompile("EOF")
 	assert.NotEqual(t, "", re.FindString(err.Error()))
 }
 
-func TestErrorReadingFormat(t *testing.T) {
+func TestErrorReadingFormatNotEnoughData(t *testing.T) {
 	// Chunk ID must be 4 bytes.
 	data := strings.NewReader("RIFFaaaaWAV")
 	reader, err := NewWavReader(data)
 	assert.Nil(t, reader)
 	assert.NotNil(t, err)
-	re := regexp.MustCompile("Format")
+	re := regexp.MustCompile("EOF")
 	assert.NotEqual(t, "", re.FindString(err.Error()))
 }
 
-func TestInvalidWavFileChunkType(t *testing.T) {
-	data := strings.NewReader("Hello World!")
+func TestErrorReadingFormatWrongValue(t *testing.T) {
+	// Chunk ID must be 4 bytes.
+	data := strings.NewReader("RIFFaaaaWAVD")
 	reader, err := NewWavReader(data)
 	assert.Nil(t, reader)
 	assert.NotNil(t, err)
-	assert.Equal(t, fmt.Sprintf(RiffError, "Hell"), err.Error())
+	re := regexp.MustCompile("Should be WAVE")
+	assert.NotEqual(t, "", re.FindString(err.Error()))
 }
 
-func TestInvalidWavFileFormatType(t *testing.T) {
-	data := strings.NewReader("RIFFo World!")
-	reader, err := NewWavReader(data)
-	assert.Nil(t, reader)
-	assert.NotNil(t, err)
-	assert.Equal(t, fmt.Sprintf(WaveError, "rld!"), err.Error())
-}
-
-func TestReadHeaderChunk(t *testing.T) {
+func TestInvalidFormatChunkNotEnoughData(t *testing.T) {
 	var buffer bytes.Buffer
 	// Build a fake RIFF chunk
 	buffer.WriteString("RIFF")
@@ -71,7 +115,7 @@ func TestReadHeaderChunk(t *testing.T) {
 	_, err := NewWavReader(strings.NewReader(buffer.String()))
 	// Expect an invalid Format Chunk as the header was parsed successfully.
 	assert.NotNil(t, err)
-	re := regexp.MustCompile("Invalid format chunk")
+	re := regexp.MustCompile("EOF")
 	assert.NotEqual(t, "", re.FindString(err.Error()))
 }
 
@@ -91,96 +135,55 @@ func TestInvalidFormatChunk(t *testing.T) {
 	binary.BigEndian.PutUint32(sizeBytes, fmtChunkId)
 	buffer.Write(sizeBytes)
 
-	data := strings.NewReader(buffer.String())
-	reader, err := NewWavReader(data)
+	reader, err := NewWavReader(&buffer)
 	assert.Nil(t, reader)
 	assert.NotNil(t, err)
 }
 
-func TestValidHeaderAndFormatChunk(t *testing.T) {
-	var buffer bytes.Buffer
+func TestInvalidDataChunkNotEnoughData(t *testing.T) {
+	buffer := getValidHeaderAndFmtChunk()
+
+	reader, err := NewWavReader(buffer)
+	assert.Nil(t, reader)
+	assert.NotNil(t, err)
+	re := regexp.MustCompile("EOF")
+	assert.NotEqual(t, "", re.FindString(err.Error()))
+}
+
+func TestValidHeaderFormatAndDataChunk(t *testing.T) {
 	var size4Bytes = make([]byte, 4)
-	var size2Bytes = make([]byte, 2)
-	wavSize := uint32(123)
-	fmtChunkId := uint32(456)
-	fmtChunkSize := uint32(789)
-	audioFormat := uint16(111)
-	numChannels := uint16(5)
-	sampleRate := uint32(44000)
-	byteRate := uint32(56000)
-	blockAlign := uint16(12)
-	bitsPerSample := uint16(2200)
 
-	buffer.WriteString("RIFF")
-	binary.LittleEndian.PutUint32(size4Bytes, wavSize)
+	buffer := getValidHeaderAndFmtChunk()
+	buffer.WriteString("data")
+	binary.LittleEndian.PutUint32(size4Bytes, uint32(0))
 	buffer.Write(size4Bytes)
-	buffer.WriteString("WAVE")
-	binary.BigEndian.PutUint32(size4Bytes, fmtChunkId)
-	buffer.Write(size4Bytes)
-	binary.LittleEndian.PutUint32(size4Bytes, fmtChunkSize)
-	buffer.Write(size4Bytes)
-	binary.LittleEndian.PutUint16(size2Bytes, audioFormat)
-	buffer.Write(size2Bytes)
-	binary.LittleEndian.PutUint16(size2Bytes, numChannels)
-	buffer.Write(size2Bytes)
-	binary.LittleEndian.PutUint32(size4Bytes, sampleRate)
-	buffer.Write(size4Bytes)
-	binary.LittleEndian.PutUint32(size4Bytes, byteRate)
-	buffer.Write(size4Bytes)
-	binary.LittleEndian.PutUint16(size2Bytes, blockAlign)
-	buffer.Write(size2Bytes)
-	binary.LittleEndian.PutUint16(size2Bytes, bitsPerSample)
-	buffer.Write(size2Bytes)
 
-	data := strings.NewReader(buffer.String())
-	reader, err := NewWavReader(data)
+	reader, err := NewWavReader(buffer)
 	assert.Nil(t, err)
 	assert.NotNil(t, reader)
-	assert.Equal(t, wavSize, reader.Size)
-	assert.Equal(t, fmtChunkId, reader.FormatChunk.Id)
-	assert.Equal(t, fmtChunkSize, reader.FormatChunk.Size)
-	assert.Equal(t, audioFormat, reader.FormatChunk.AudioFormat)
-	assert.Equal(t, numChannels, reader.FormatChunk.NumChannels)
-	assert.Equal(t, sampleRate, reader.FormatChunk.SampleRate)
-	assert.Equal(t, byteRate, reader.FormatChunk.ByteRate)
-	assert.Equal(t, blockAlign, reader.FormatChunk.BlockAlign)
-	assert.Equal(t, bitsPerSample, reader.FormatChunk.BitsPerSample)
+	assert.Equal(t, wavSize, reader.Riff.Size)
+
+	var fmtChunkStr = make([]byte, 4)
+	binary.Write(
+		bytes.NewBuffer(fmtChunkStr), binary.BigEndian, reader.Fmt.Id)
+	assert.Equal(t, fmtChunkId, string(fmtChunkId))
+	assert.Equal(t, fmtChunkSize, reader.Fmt.Size)
+	assert.Equal(t, audioFormat, reader.Fmt.AudioFormat)
+	assert.Equal(t, numChannels, reader.Fmt.NumChannels)
+	assert.Equal(t, sampleRate, reader.Fmt.SampleRate)
+	assert.Equal(t, byteRate, reader.Fmt.ByteRate)
+	assert.Equal(t, blockAlign, reader.Fmt.BlockAlign)
+	assert.Equal(t, bitsPerSample, reader.Fmt.BitsPerSample)
 }
 
 func TestValidData(t *testing.T) {
-	var buffer bytes.Buffer
-	var size4Bytes = make([]byte, 4)
 	var size2Bytes = make([]byte, 2)
-	wavSize := uint32(123)
-	fmtChunkId := uint32(456)
-	fmtChunkSize := uint32(789)
-	audioFormat := uint16(111)
-	numChannels := uint16(2)
-	sampleRate := uint32(44000)
-	byteRate := uint32(56000)
-	blockAlign := uint16(12)
-	bitsPerSample := uint16(16)
+	var size4Bytes = make([]byte, 4)
 
-	buffer.WriteString("RIFF")
-	binary.LittleEndian.PutUint32(size4Bytes, wavSize)
+	buffer := getValidHeaderAndFmtChunk()
+	buffer.WriteString("data")
+	binary.LittleEndian.PutUint32(size4Bytes, uint32(0))
 	buffer.Write(size4Bytes)
-	buffer.WriteString("WAVE")
-	binary.BigEndian.PutUint32(size4Bytes, fmtChunkId)
-	buffer.Write(size4Bytes)
-	binary.LittleEndian.PutUint32(size4Bytes, fmtChunkSize)
-	buffer.Write(size4Bytes)
-	binary.LittleEndian.PutUint16(size2Bytes, audioFormat)
-	buffer.Write(size2Bytes)
-	binary.LittleEndian.PutUint16(size2Bytes, numChannels)
-	buffer.Write(size2Bytes)
-	binary.LittleEndian.PutUint32(size4Bytes, sampleRate)
-	buffer.Write(size4Bytes)
-	binary.LittleEndian.PutUint32(size4Bytes, byteRate)
-	buffer.Write(size4Bytes)
-	binary.LittleEndian.PutUint16(size2Bytes, blockAlign)
-	buffer.Write(size2Bytes)
-	binary.LittleEndian.PutUint16(size2Bytes, bitsPerSample)
-	buffer.Write(size2Bytes)
 
 	// Write data entries corresponding to 2 channels and 16 bits per
 	// sample.
@@ -195,24 +198,144 @@ func TestValidData(t *testing.T) {
 	binary.LittleEndian.PutUint16(size2Bytes, uint16(signedSample))
 	buffer.Write(size2Bytes)
 
-	data := strings.NewReader(buffer.String())
-	reader, err := NewWavReader(data)
+	reader, err := NewWavReader(buffer)
 	assert.Nil(t, err)
 	assert.NotNil(t, reader)
 
+	var value uint16
 	sample, err := reader.GetSample()
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(sample))
-	assert.Equal(t, 123, sample[0])
-	assert.Equal(t, -123, int16(sample[1]))
+	// sample[0] and sample[1] should each have 2 bytes.
+	assert.Equal(t, 2, len(sample[0]))
+	assert.Equal(t, 2, len(sample[1]))
+	// Confirm the actual sample values per channel.
+	binary.Read(bytes.NewBuffer(sample[0]), binary.LittleEndian, &value)
+	assert.Equal(t, 123, int16(value))
+	binary.Read(bytes.NewBuffer(sample[1]), binary.LittleEndian, &value)
+	assert.Equal(t, -123, int16(value))
+
 	sample, err = reader.GetSample()
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(sample))
-	assert.Equal(t, 321, sample[0])
-	assert.Equal(t, -321, int16(sample[1]))
+	// sample[0] and sample[1] should each have 2 bytes.
+	assert.Equal(t, 2, len(sample[0]))
+	assert.Equal(t, 2, len(sample[1]))
+
+	binary.Read(bytes.NewBuffer(sample[0]), binary.LittleEndian, &value)
+	assert.Equal(t, 321, int16(value))
+	binary.Read(bytes.NewBuffer(sample[1]), binary.LittleEndian, &value)
+	assert.Equal(t, -321, int16(value))
 
 	sample, err = reader.GetSample()
 	assert.Nil(t, sample)
 	assert.NotNil(t, err)
 	assert.Equal(t, io.EOF, err)
+
+	// Confirm that the Samples have been added to the WavReader.
+	assert.Equal(t, 2, len(reader.Data.Samples))
+}
+
+type mockWriterAtCloser struct {
+	data []byte
+}
+
+func (m *mockWriterAtCloser) WriteAt(p []byte, off int64) (n int, err error) {
+	if int(off)+len(p) > len(m.data) {
+		return 0, errors.New("Buffer not big enough.")
+	}
+	for index, value := range p {
+		m.data[off+int64(index)] = value
+	}
+	return len(p), nil
+}
+
+func TestWavWriterErrorNotEnoughBuffer(t *testing.T) {
+	writer := &mockWriterAtCloser{make([]byte, 10)}
+	wavWriter, err := NewWavWriter(writer, nil)
+	assert.Nil(t, wavWriter)
+	assert.NotNil(t, err)
+}
+
+func TestWavWriterValidDefaultHeader(t *testing.T) {
+	writer := &mockWriterAtCloser{make([]byte, 100)}
+	wavWriter, err := NewWavWriter(writer, nil)
+	assert.NotNil(t, wavWriter)
+	assert.Nil(t, err)
+
+	var num16 uint16
+	var num32 uint32
+	assert.Equal(t, "RIFF", bytes.NewBuffer(writer.data[:4]).String())
+	binary.Read(
+		bytes.NewBuffer(writer.data[4:8]), binary.LittleEndian, &num32)
+	assert.Equal(t, uint32(36), num32)
+	assert.Equal(t, "WAVE", bytes.NewBuffer(writer.data[8:12]).String())
+	assert.Equal(t, "fmt ", bytes.NewBuffer(writer.data[12:16]).String())
+	binary.Read(
+		bytes.NewBuffer(writer.data[16:20]), binary.LittleEndian,
+		&num32)
+	assert.Equal(t, uint32(16), num32)
+	binary.Read(
+		bytes.NewBuffer(writer.data[20:22]), binary.LittleEndian,
+		&num16)
+	assert.Equal(t, uint32(1), num16)
+	binary.Read(
+		bytes.NewBuffer(writer.data[22:24]), binary.LittleEndian,
+		&num16)
+	assert.Equal(t, uint32(2), num16)
+	binary.Read(
+		bytes.NewBuffer(writer.data[24:28]), binary.LittleEndian,
+		&num32)
+	assert.Equal(t, uint32(44100), num32)
+	binary.Read(
+		bytes.NewBuffer(writer.data[28:32]), binary.LittleEndian,
+		&num32)
+	assert.Equal(t, uint32(176400), num32)
+	binary.Read(
+		bytes.NewBuffer(writer.data[32:34]), binary.LittleEndian,
+		&num16)
+	assert.Equal(t, uint32(4), num16)
+	binary.Read(
+		bytes.NewBuffer(writer.data[34:36]), binary.LittleEndian,
+		&num16)
+	assert.Equal(t, uint32(16), num16)
+	assert.Equal(t, "data", bytes.NewBuffer(writer.data[36:40]).String())
+	binary.Read(
+		bytes.NewBuffer(writer.data[40:44]), binary.LittleEndian,
+		&num32)
+	assert.Equal(t, uint32(0), num32)
+}
+
+func TestWrongSampleSize(t *testing.T) {
+	writer := &mockWriterAtCloser{make([]byte, 100)}
+	wavWriter, err := NewWavWriter(writer, nil)
+
+	// Default writer expects 4 bytes per sample.
+	sample := Sample([][]byte{[]byte{1}, []byte{2}})
+	err = wavWriter.AddSample(sample)
+	assert.NotNil(t, err)
+	re := regexp.MustCompile("Only found 2.")
+	assert.NotEqual(t, "", re.FindString(err.Error()))
+}
+
+func TestAddSamples(t *testing.T) {
+	writer := &mockWriterAtCloser{make([]byte, 100)}
+	wavWriter, err := NewWavWriter(writer, nil)
+
+	// Default writer expects 4 bytes per sample.
+	sample := Sample([][]byte{[]byte{1, 2}, []byte{2, 3}})
+	err = wavWriter.AddSample(sample)
+	assert.Nil(t, err)
+
+	// Check the new sizes.
+	var num32 uint32
+	binary.Read(
+		bytes.NewBuffer(writer.data[4:8]), binary.LittleEndian, &num32)
+	assert.Equal(t, uint32(40), num32)
+	binary.Read(
+		bytes.NewBuffer(writer.data[40:44]), binary.LittleEndian,
+		&num32)
+	assert.Equal(t, uint32(4), num32)
+	// Confirm the sample was written.
+	assert.Equal(t, writer.data[44:48], []byte{1, 2, 2, 3})
 }
