@@ -43,29 +43,6 @@ var defaultRiffHeader *RiffHeader = &RiffHeader{
 }
 
 /**
- * The default format chunk contains the following default values:
- *   2 channels
- *   16 bits per sample
- *   44100 sample rate
- *   176400 byte rate
- *   4 byte block allignment
- */
-var defaultFormatChunk *FmtChunk = &FmtChunk{
-	&SubChunk{
-		Id:   uint32(1718449184),
-		Size: uint32(16),
-	},
-	&fmtChunk{
-		AudioFormat:   uint16(1),
-		NumChannels:   uint16(2),
-		SampleRate:    uint32(44100),
-		ByteRate:      uint32(176400),
-		BlockAlign:    uint16(4),
-		BitsPerSample: uint16(16),
-	},
-}
-
-/**
  * A default data chunk. It has an ID of 'data' and a size of 0 with no
  * samples to start with.
  */
@@ -136,6 +113,32 @@ type fmtChunk struct {
 type FmtChunk struct {
 	*SubChunk
 	*fmtChunk
+}
+
+/**
+ * Returns a new FmtChunk with sensible defaults.
+ * @return {*FmtChunk} A FmtChunk pointer with the following defaults:
+ *     2 channels
+ *     16 bits per sample
+ *     44100 sample rate
+ *     176400 byte rate
+ *     4 byte block allignment
+ */
+func NewDefaultFmtChunk() *FmtChunk {
+	return &FmtChunk{
+		&SubChunk{
+			Id:   uint32(1718449184),
+			Size: uint32(16),
+		},
+		&fmtChunk{
+			AudioFormat:   uint16(1),
+			NumChannels:   uint16(2),
+			SampleRate:    uint32(44100),
+			ByteRate:      uint32(176400),
+			BlockAlign:    uint16(4),
+			BitsPerSample: uint16(16),
+		},
+	}
 }
 
 /**
@@ -362,11 +365,11 @@ func (w *WavReader) GetSample() (Sample, error) {
  */
 func NewWavWriter(output io.WriterAt, fmt *FmtChunk) (*WavWriter, error) {
 	if fmt == nil {
-		fmt = defaultFormatChunk
+		fmt = NewDefaultFmtChunk()
 	}
 	wavWriter := &WavWriter{&Wav{
 		defaultRiffHeader,
-		defaultFormatChunk,
+		fmt,
 		defaultDataChunk,
 	}, output}
 	err := wavWriter.writeInitialData()
