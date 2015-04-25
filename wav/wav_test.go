@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/husafan/wav"
+	. "github.com/husafan/audio/wav"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -69,7 +69,7 @@ func TestErrorReadingRiffWrongId(t *testing.T) {
 	reader, err := NewWavReader(data)
 	assert.Nil(t, reader)
 	assert.NotNil(t, err)
-	re := regexp.MustCompile("Should be RIFF")
+	re := regexp.MustCompile("should be 'RIFF'")
 	assert.NotEqual(t, "", re.FindString(err.Error()))
 }
 
@@ -99,7 +99,7 @@ func TestErrorReadingFormatWrongValue(t *testing.T) {
 	reader, err := NewWavReader(data)
 	assert.Nil(t, reader)
 	assert.NotNil(t, err)
-	re := regexp.MustCompile("Should be WAVE")
+	re := regexp.MustCompile("should be 'WAVE'")
 	assert.NotEqual(t, "", re.FindString(err.Error()))
 }
 
@@ -306,15 +306,28 @@ func TestWavWriterValidDefaultHeader(t *testing.T) {
 	assert.Equal(t, uint32(0), num32)
 }
 
+func TestWrongChannelSampleSize(t *testing.T) {
+	writer := &mockWriterAtCloser{make([]byte, 100)}
+	wavWriter, err := NewWavWriter(writer, nil)
+	wavWriter.Fmt.NumChannels = uint16(1)
+	wavWriter.Fmt.BitsPerSample = uint16(8)
+
+	sample := Sample([][]byte{{1}, {2}})
+	err = wavWriter.AddSample(sample)
+	assert.NotNil(t, err)
+	re := regexp.MustCompile("expected 1 channels; found 2")
+	assert.NotEqual(t, "", re.FindString(err.Error()))
+}
+
 func TestWrongSampleSize(t *testing.T) {
 	writer := &mockWriterAtCloser{make([]byte, 100)}
 	wavWriter, err := NewWavWriter(writer, nil)
 
 	// Default writer expects 4 bytes per sample.
-	sample := Sample([][]byte{[]byte{1}, []byte{2}})
+	sample := Sample([][]byte{{1}, {2}})
 	err = wavWriter.AddSample(sample)
 	assert.NotNil(t, err)
-	re := regexp.MustCompile("Only found 2.")
+	re := regexp.MustCompile("per sample but only found 2")
 	assert.NotEqual(t, "", re.FindString(err.Error()))
 }
 
@@ -323,7 +336,7 @@ func TestAddSamples(t *testing.T) {
 	wavWriter, err := NewWavWriter(writer, nil)
 
 	// Default writer expects 4 bytes per sample.
-	sample := Sample([][]byte{[]byte{1, 2}, []byte{2, 3}})
+	sample := Sample([][]byte{{1, 2}, {2, 3}})
 	err = wavWriter.AddSample(sample)
 	assert.Nil(t, err)
 
