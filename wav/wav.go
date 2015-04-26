@@ -38,10 +38,10 @@ by the number BytesPerSample * NumOfChannels.
 */
 var defaultRiffHeader *RiffHeader = &RiffHeader{
 	&SubChunk{
-		Id:   uint32(1380533830),
+		Id:   [4]byte{'R', 'I', 'F', 'F'},
 		Size: uint32(36),
 	},
-	uint32(1463899717),
+	[4]byte{'W', 'A', 'V', 'E'},
 }
 
 /*
@@ -50,7 +50,7 @@ with.
 */
 var defaultDataChunk *DataChunk = &DataChunk{
 	SubChunk: &SubChunk{
-		Id: uint32(1684108385),
+		Id: [4]byte{'d', 'a', 't', 'a'},
 	},
 }
 
@@ -59,7 +59,7 @@ SubChunk defines the common properties of all WAV file chunks. It includes an ID
 and a size in bytes. The ID is big-endian while the size is little-endian.
 */
 type SubChunk struct {
-	Id   uint32
+	Id   [4]byte
 	Size uint32
 }
 
@@ -80,7 +80,7 @@ the actual data.
 */
 type RiffHeader struct {
 	*SubChunk
-	Format uint32
+	Format [4]byte
 }
 
 /*
@@ -127,7 +127,7 @@ NewDefaultFmtChunk Returns a new FmtChunk with sensible defaults:
 func NewDefaultFmtChunk() *FmtChunk {
 	return &FmtChunk{
 		&SubChunk{
-			Id:   uint32(1718449184),
+			Id:   [4]byte{'f', 'm', 't', ' '},
 			Size: uint32(16),
 		},
 		&fmtChunk{
@@ -179,16 +179,6 @@ type WavWriter struct {
 }
 
 /*
-uint32AsString will return a string value, given a uint32, where each byte is
-interpreted as an ASCII character. Bytes are interpreted in big endian format.
-*/
-func uint32AsString(number *uint32) string {
-	var buffer bytes.Buffer
-	binary.Write(&buffer, binary.BigEndian, number)
-	return buffer.String()
-}
-
-/*
 readSubChunk reads and returns a populated SubChunk given an *io.Reader to read
 from. An error is returned from this function if there was an error in reading
 the necessary bytes.
@@ -222,7 +212,7 @@ func readRiffHeader(reader *io.Reader) (*RiffHeader, error) {
 		return nil, err
 	}
 	// Validate the Riff header chunk ID.
-	if uintString := uint32AsString(&subChunk.Id); uintString != Riff {
+	if uintString := string(subChunk.Id[:]); uintString != Riff {
 		return nil, fmt.Errorf(RiffError, uintString)
 	}
 	// Create a Riff header.
@@ -232,7 +222,7 @@ func readRiffHeader(reader *io.Reader) (*RiffHeader, error) {
 		return nil, fmt.Errorf("error reading format: %v", err.Error())
 	}
 	// Validate the format field of the Riff header.
-	if uintString := uint32AsString(&riffHeader.Format); uintString != Wave {
+	if uintString := string(riffHeader.Format[:]); uintString != Wave {
 		return nil, fmt.Errorf(WaveError, uintString)
 	}
 	return riffHeader, nil
@@ -253,7 +243,7 @@ func readFormatChunk(reader *io.Reader) (*FmtChunk, error) {
 		return nil, err
 	}
 	// Validate that the ID is "fmt ".
-	if uintString := uint32AsString(&subChunk.Id); uintString != Fmt {
+	if uintString := string(subChunk.Id[:]); uintString != Fmt {
 		return nil, fmt.Errorf(FmtError, uintString)
 	}
 	newFmtChunk := &fmtChunk{}
@@ -279,7 +269,7 @@ func readDataChunk(reader *io.Reader) (*DataChunk, error) {
 		return nil, err
 	}
 	// Validate that the ID is "data".
-	if uintString := uint32AsString(&subChunk.Id); uintString != Data {
+	if uintString := string(subChunk.Id[:]); uintString != Data {
 		return nil, fmt.Errorf(DataError, uintString)
 	}
 	return &DataChunk{SubChunk: subChunk}, nil
