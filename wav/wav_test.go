@@ -211,9 +211,9 @@ func TestValidData(t *testing.T) {
 	assert.Equal(t, 2, len(sample[1]))
 	// Confirm the actual sample values per channel.
 	binary.Read(bytes.NewBuffer(sample[0]), binary.LittleEndian, &value)
-	assert.Equal(t, 123, int16(value))
+	assert.Equal(t, int16(123), int16(value))
 	binary.Read(bytes.NewBuffer(sample[1]), binary.LittleEndian, &value)
-	assert.Equal(t, -123, int16(value))
+	assert.Equal(t, int16(-123), int16(value))
 
 	sample, err = reader.GetSample()
 	assert.Nil(t, err)
@@ -223,9 +223,9 @@ func TestValidData(t *testing.T) {
 	assert.Equal(t, 2, len(sample[1]))
 
 	binary.Read(bytes.NewBuffer(sample[0]), binary.LittleEndian, &value)
-	assert.Equal(t, 321, int16(value))
+	assert.Equal(t, int16(321), int16(value))
 	binary.Read(bytes.NewBuffer(sample[1]), binary.LittleEndian, &value)
-	assert.Equal(t, -321, int16(value))
+	assert.Equal(t, int16(-321), int16(value))
 
 	sample, err = reader.GetSample()
 	assert.Nil(t, sample)
@@ -265,12 +265,12 @@ func TestWavWriterValidDefaultHeader(t *testing.T) {
 
 	var num16 uint16
 	var num32 uint32
-	assert.Equal(t, "RIFF", bytes.NewBuffer(writer.data[:4]).String())
+	assert.Equal(t, "RIFF", string(writer.data[:4]))
 	binary.Read(
 		bytes.NewBuffer(writer.data[4:8]), binary.LittleEndian, &num32)
 	assert.Equal(t, uint32(36), num32)
-	assert.Equal(t, "WAVE", bytes.NewBuffer(writer.data[8:12]).String())
-	assert.Equal(t, "fmt ", bytes.NewBuffer(writer.data[12:16]).String())
+	assert.Equal(t, "WAVE", string(writer.data[8:12]))
+	assert.Equal(t, "fmt ", string(writer.data[12:16]))
 	binary.Read(
 		bytes.NewBuffer(writer.data[16:20]), binary.LittleEndian,
 		&num32)
@@ -278,11 +278,11 @@ func TestWavWriterValidDefaultHeader(t *testing.T) {
 	binary.Read(
 		bytes.NewBuffer(writer.data[20:22]), binary.LittleEndian,
 		&num16)
-	assert.Equal(t, uint32(1), num16)
+	assert.Equal(t, uint16(1), num16)
 	binary.Read(
 		bytes.NewBuffer(writer.data[22:24]), binary.LittleEndian,
 		&num16)
-	assert.Equal(t, uint32(2), num16)
+	assert.Equal(t, uint16(2), num16)
 	binary.Read(
 		bytes.NewBuffer(writer.data[24:28]), binary.LittleEndian,
 		&num32)
@@ -294,12 +294,12 @@ func TestWavWriterValidDefaultHeader(t *testing.T) {
 	binary.Read(
 		bytes.NewBuffer(writer.data[32:34]), binary.LittleEndian,
 		&num16)
-	assert.Equal(t, uint32(4), num16)
+	assert.Equal(t, uint16(4), num16)
 	binary.Read(
 		bytes.NewBuffer(writer.data[34:36]), binary.LittleEndian,
 		&num16)
-	assert.Equal(t, uint32(16), num16)
-	assert.Equal(t, "data", bytes.NewBuffer(writer.data[36:40]).String())
+	assert.Equal(t, uint16(16), num16)
+	assert.Equal(t, "data", string(writer.data[36:40]))
 	binary.Read(
 		bytes.NewBuffer(writer.data[40:44]), binary.LittleEndian,
 		&num32)
