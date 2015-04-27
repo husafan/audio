@@ -1,5 +1,5 @@
 # audio
-[![Build Status](https://travis-ci.org/husafan/audi.svg)](https://travis-ci.org/husafan/audio)
+[![Build Status](https://travis-ci.org/husafan/audio.svg?branch=master)](https://travis-ci.org/husafan/audio)
 ###
 A Go library for reading and writing audio files. It currently aims to support MIDI and WAV.
 
